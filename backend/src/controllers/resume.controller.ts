@@ -5,15 +5,17 @@ import {
   Get,
   Param,
   Put,
+  Delete,
   UseGuards,
   UploadedFile,
   UseInterceptors,
   Request,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage, memoryStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { ResumeService } from '../services/resume.service';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -58,5 +60,19 @@ export class ResumeController {
   ) {
     const joiningDate = body.joiningDate ? new Date(body.joiningDate) : undefined;
     return this.resumeService.updateEmployeeStatus(id, body.status, joiningDate);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.HR)
+  async deleteUser(@Param('id') id: string) {
+    return this.resumeService.deleteUser(id);
+  }
+
+  @Get(':id/download')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.HR, UserRole.PAYROLL)
+  async downloadResume(@Param('id') id: string, @Res() res: Response) {
+    return this.resumeService.downloadResume(id, res);
   }
 }

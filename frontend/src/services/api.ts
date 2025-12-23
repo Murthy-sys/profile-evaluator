@@ -40,6 +40,11 @@ export const resumeAPI = {
   getUserDetails: (id: string) => api.get(`/resume/${id}`),
   updateEmployeeStatus: (id: string, status: string, joiningDate?: string) =>
     api.put(`/resume/${id}/status`, { status, joiningDate }),
+  deleteUser: (id: string) => api.delete(`/resume/${id}`),
+  downloadResume: (id: string) => 
+    api.get(`/resume/${id}/download`, { 
+      responseType: 'blob'
+    }),
 };
 
 export default api;

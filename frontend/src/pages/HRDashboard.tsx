@@ -33,6 +33,8 @@ import {
   Refresh,
   Edit,
   TrendingUp,
+  Delete,
+  Download,
 } from '@mui/icons-material';
 import { resumeAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -132,6 +134,36 @@ export default function HRDashboard() {
       fetchUsers();
     } catch (error) {
       console.error('Error updating status:', error);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (window.confirm(`Are you sure you want to delete ${userName}? This action cannot be undone.`)) {
+      try {
+        await resumeAPI.deleteUser(userId);
+        fetchUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Failed to delete user. Please try again.');
+      }
+    }
+  };
+
+  const handleDownloadResume = async (userId: string, userName: string) => {
+    try {
+      const response = await resumeAPI.downloadResume(userId);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${userName.replace(/\s+/g, '_')}_Resume.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading resume:', error);
+      alert('Failed to download resume. Please try again.');
     }
   };
 
@@ -416,13 +448,14 @@ export default function HRDashboard() {
                     </TableCell>
                     <TableCell>Top Skills</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Resume</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                         <Typography variant="body1" color="text.secondary">
                           No candidates found. {searchQuery && 'Try adjusting your search.'}
                         </Typography>
@@ -529,16 +562,38 @@ export default function HRDashboard() {
                             sx={{ fontWeight: 600 }}
                           />
                         </TableCell>
-                        <TableCell align="center">
-                          <Tooltip title="Update Status">
+                        <TableCell>
+                          <Tooltip title="Download Resume">
                             <IconButton
-                              onClick={() => handleOpenDialog(user)}
+                              onClick={() => handleDownloadResume(user._id, user.fullName)}
                               color="primary"
                               size="small"
                             >
-                              <Edit fontSize="small" />
+                              <Download fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Tooltip title="Update Status">
+                              <IconButton
+                                onClick={() => handleOpenDialog(user)}
+                                color="primary"
+                                size="small"
+                              >
+                                <Edit fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete User">
+                              <IconButton
+                                onClick={() => handleDeleteUser(user._id, user.fullName)}
+                                color="error"
+                                size="small"
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))

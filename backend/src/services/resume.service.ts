@@ -263,6 +263,58 @@ export class ResumeService {
     return this.sanitizeUser(user);
   }
 
+  async deleteUser(userId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Delete resume file if it exists
+    if (user.resumePath) {
+      const filepath = path.join(process.cwd(), user.resumePath);
+      if (fs.existsSync(filepath)) {
+        try {
+          fs.unlinkSync(filepath);
+          console.log(`🗑️ Deleted resume file: ${filepath}`);
+        } catch (error) {
+          console.error('Error deleting resume file:', error);
+        }
+      }
+    }
+
+    // Delete user from database
+    await this.userModel.findByIdAndDelete(userId);
+
+    return {
+      message: 'User and associated resume deleted successfully',
+    };
+  }
+
+  async downloadResume(userId: string, res: any) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.resumePath) {
+      throw new NotFoundException('Resume not found for this user');
+    }
+
+    const filepath = path.join(process.cwd(), user.resumePath);
+    if (!fs.existsSync(filepath)) {
+      throw new NotFoundException('Resume file not found on server');
+    }
+
+    // Set response headers for file download
+    const filename = `${user.fullName.replace(/\s+/g, '_')}_Resume.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filepath);
+    fileStream.pipe(res);
+  }
+
   private sanitizeUser(user: User) {
     const userObject = user.toObject();
     delete userObject.password;
