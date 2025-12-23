@@ -65,6 +65,7 @@ export default function HRDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchUsers();
@@ -190,6 +191,18 @@ export default function HRDashboard() {
 
   const handleToggleSort = () => {
     setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+  };
+
+  const toggleSkillsExpansion = (userId: string) => {
+    setExpandedSkills((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
   };
 
   if (loading) {
@@ -448,14 +461,13 @@ export default function HRDashboard() {
                     </TableCell>
                     <TableCell>Top Skills</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Resume</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                         <Typography variant="body1" color="text.secondary">
                           No candidates found. {searchQuery && 'Try adjusting your search.'}
                         </Typography>
@@ -533,7 +545,7 @@ export default function HRDashboard() {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 200 }}>
-                            {user.keySkills?.slice(0, 3).map((skill, index) => (
+                            {user.keySkills?.slice(0, expandedSkills.has(user._id) ? user.keySkills.length : 3).map((skill, index) => (
                               <Chip
                                 key={index}
                                 label={skill}
@@ -547,9 +559,20 @@ export default function HRDashboard() {
                             ))}
                             {(user.keySkills?.length || 0) > 3 && (
                               <Chip
-                                label={`+${(user.keySkills?.length || 0) - 3}`}
+                                label={expandedSkills.has(user._id) ? 'Show Less' : `+${(user.keySkills?.length || 0) - 3}`}
                                 size="small"
-                                sx={{ fontSize: '0.7rem' }}
+                                onClick={() => toggleSkillsExpansion(user._id)}
+                                sx={{ 
+                                  fontSize: '0.7rem',
+                                  cursor: 'pointer',
+                                  bgcolor: 'secondary.light',
+                                  color: 'secondary.dark',
+                                  '&:hover': {
+                                    bgcolor: 'secondary.main',
+                                    color: 'white',
+                                  },
+                                  transition: 'all 0.2s',
+                                }}
                               />
                             )}
                           </Box>
@@ -562,19 +585,17 @@ export default function HRDashboard() {
                             sx={{ fontWeight: 600 }}
                           />
                         </TableCell>
-                        <TableCell>
-                          <Tooltip title="Download Resume">
-                            <IconButton
-                              onClick={() => handleDownloadResume(user._id, user.fullName)}
-                              color="primary"
-                              size="small"
-                            >
-                              <Download fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
                         <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Tooltip title="Download Resume">
+                              <IconButton
+                                onClick={() => handleDownloadResume(user._id, user.fullName)}
+                                color="success"
+                                size="small"
+                              >
+                                <Download fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Update Status">
                               <IconButton
                                 onClick={() => handleOpenDialog(user)}
