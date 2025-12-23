@@ -1,67 +1,107 @@
-import { Injectable } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { Transporter } from 'nodemailer';
+
+/**
+ * Strong typing for resume user
+ */
+interface ResumeUser {
+  fullName: string;
+  email: string;
+  phone?: string;
+  referredBy?: string;
+  education?: string;
+  experience?: string;
+}
 
 @Injectable()
 export class EmailService {
-  private transporter;
+  private readonly transporter: Transporter;
+  private readonly fromEmail: string;
+  private readonly logger = new Logger(EmailService.name);
 
-  constructor(private configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
+    const host = this.configService.getOrThrow<string>('EMAIL_HOST');
+    const port = Number(this.configService.getOrThrow('EMAIL_PORT')); // ✅ FIX
+    const user = this.configService.getOrThrow<string>('EMAIL_USER');
+    const pass = this.configService.getOrThrow<string>('EMAIL_PASSWORD');
+
+    this.fromEmail = this.configService.getOrThrow<string>('EMAIL_FROM');
+
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('EMAIL_HOST'),
-      port: this.configService.get<number>('EMAIL_PORT'),
-      secure: false,
+      host,
+      port,
+      secure: port === 465,
       auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASSWORD'),
+        user,
+        pass,
       },
+      authMethod: 'LOGIN', // ✅ CRITICAL for Gmail
+    });
+
+    this.transporter.verify((error) => {
+      if (error) {
+        console.error('❌ Email transporter verification failed', error);
+      } else {
+        console.log('✅ Email transporter is ready');
+      }
     });
   }
 
-  async sendResumeScoreToHR(user: any, score: number, skills: string[]) {
+  // ---------------------------
+  // Resume score email to HR
+  // ---------------------------
+  async sendResumeScoreToHR(user: ResumeUser, score: number, skills: string[]) {
     const hrEmail = this.configService.get<string>('HR_EMAIL');
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM'),
+      from: this.fromEmail,
       to: hrEmail,
       subject: `New Resume Submission - ${user.fullName}`,
       html: `
         <h2>New Resume Submission</h2>
         <p><strong>Candidate Name:</strong> ${user.fullName}</p>
         <p><strong>Email:</strong> ${user.email}</p>
-        <p><strong>Phone:</strong> ${user.phone}</p>
+        ${user.phone ? `<p><strong>Phone:</strong> ${user.phone}</p>` : ''}
         <p><strong>Resume Score:</strong> ${score}/100</p>
         <p><strong>Key Skills:</strong> ${skills.join(', ')}</p>
         ${user.referredBy ? `<p><strong>Referred By:</strong> ${user.referredBy}</p>` : ''}
         <p><strong>Education:</strong> ${user.education || 'N/A'}</p>
         <p><strong>Experience:</strong> ${user.experience || 'N/A'}</p>
-        <br>
+        <br />
         <p>Please review the candidate's profile in the system.</p>
       `,
     };
 
     try {
-      console.log('📧 Attempting to send email to HR:', hrEmail);
-      console.log('Email config:', {
-        host: this.configService.get<string>('EMAIL_HOST'),
-        port: this.configService.get<number>('EMAIL_PORT'),
-        user: this.configService.get<string>('EMAIL_USER'),
-      });
-      
+      this.logger.log(`📧 Sending resume email to HR: ${hrEmail}`);
       const info = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully:', info.messageId);
+      this.logger.log(`✅ Email sent successfully: ${info.messageId}`);
       return info;
     } catch (error) {
-      console.error('❌ Email sending failed:', error);
-      throw error;
+      this.logger.error('❌ Failed to send resume email', error);
+      throw new InternalServerErrorException('Failed to send email to HR');
     }
   }
 
-  async sendReferralPaymentNotification(referrerName: string, candidateName: string, candidateEmail: string) {
+  // ---------------------------
+  // Referral payment email
+  // ---------------------------
+  async sendReferralPaymentNotification(
+    referrerName: string,
+    candidateName: string,
+    candidateEmail: string,
+  ) {
     const payrollEmail = this.configService.get<string>('PAYROLL_EMAIL');
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM'),
+      from: this.fromEmail,
       to: payrollEmail,
       subject: `Referral Payment Due - ${referrerName}`,
       html: `
@@ -70,16 +110,27 @@ export class EmailService {
         <p><strong>Candidate Name:</strong> ${candidateName}</p>
         <p><strong>Candidate Email:</strong> ${candidateEmail}</p>
         <p>The candidate has successfully completed their probation period.</p>
-        <p>Please process the referral payment for ${referrerName}.</p>
+        <p>Please process the referral payment.</p>
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Referral payment email sent to ${payrollEmail}`);
+    } catch (error) {
+      this.logger.error('❌ Failed to send referral payment email', error);
+      throw new InternalServerErrorException(
+        'Failed to send referral payment email',
+      );
+    }
   }
 
+  // ---------------------------
+  // Welcome email
+  // ---------------------------
   async sendWelcomeEmail(email: string, name: string) {
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_FROM'),
+      from: this.fromEmail,
       to: email,
       subject: 'Welcome to Resume Evaluator',
       html: `
@@ -89,6 +140,12 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Welcome email sent to ${email}`);
+    } catch (error) {
+      this.logger.error('❌ Failed to send welcome email', error);
+      throw new InternalServerErrorException('Failed to send welcome email');
+    }
   }
 }
